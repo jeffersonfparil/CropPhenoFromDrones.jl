@@ -1,6 +1,11 @@
 module CropPhenoFromDrones
 
-using Rasters
+using CropPhenoFromDrones
+using Rasters, ArchGDAL, GeoDataFrames
+using CSV, DataFrames, StatsBase, Dates
+
+include("simulate.jl")
+# export 
 
 include("io.jl")
 export load_raster, load_hyperspec, load_pointcloud
