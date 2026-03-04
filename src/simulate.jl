@@ -1,7 +1,40 @@
+lon_ini = 25.0
+lon_fin = 30.0
+lon_step = 1.0
+lat_ini = 25.0
+lat_fin = 30.0
+lat_step = 1.0
 
+lon, lat = Rasters.X(lon_ini:lon_step:lon_fin), Rasters.Y(lat_ini:lat_step:lat_fin)
+ti = Ti([Dates.now()])
+ras = Rasters.Raster(rand(lon, lat, ti))
 
+coordinates::Vector{Vector{Tuple{Float64, Float64}}} = []
+xs = collect(lon_ini:lon_step:lon_fin)
+ys = collect(lat_ini:lat_step:lat_fin)
+for i in 1:(length(xs)-1)
+    for j in 1:(length(ys)-1)
+        polygon = []
+        push!(polygon, (xs[i], ys[j]))
+        push!(polygon, (xs[i], ys[j+1]))
+        push!(polygon, (xs[i+1], ys[j+1]))
+        push!(polygon, (xs[i+1], ys[j]))
+        push!(polygon, (xs[i], ys[j]))
+        push!(coordinates, polygon)
+    end
+end
+polygons = ArchGDAL.createpolygon.(coordinates)
 
+df = DataFrame(
+    geom=polygons,
+    name=string.("plot", 1:length(polygons)),
+)
+GeoDataFrames.setgeometrycolumn!(df, :geom)  # set geometry column
+GeoDataFrames.setcrs!(df, EPSG(4326))  # set coordinate reference system
 
+GeoDataFrames.write("test.shp", df)
+df_reloaded = GeoDataFrames.read("test.shp")
+    
 
 # TEST:
 

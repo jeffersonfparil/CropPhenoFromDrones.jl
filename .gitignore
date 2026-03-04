@@ -7,6 +7,10 @@
 *.svg
 *.tsv
 *.txt
+*.shp
+*.shx
+*.dbf
+*.prj
 .DS_Store
 /docs/Manifest*.toml
 /docs/Manifest.toml
