@@ -1,7 +1,12 @@
 using CropPhenoFromDrones
 using Documenter
 
-DocMeta.setdocmeta!(CropPhenoFromDrones, :DocTestSetup, :(using CropPhenoFromDrones); recursive = true)
+DocMeta.setdocmeta!(
+    CropPhenoFromDrones,
+    :DocTestSetup,
+    :(using CropPhenoFromDrones);
+    recursive = true,
+)
 
 makedocs(;
     modules = [CropPhenoFromDrones],

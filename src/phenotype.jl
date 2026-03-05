@@ -1,4 +1,4 @@
-function compute_indices(img; bands, index=:NDVI) # -> index_raster
+function compute_indices(img; bands, index = :NDVI) # -> index_raster
     # TODO
 end
 

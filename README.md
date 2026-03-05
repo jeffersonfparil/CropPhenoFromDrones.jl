@@ -8,11 +8,13 @@
 
 - `simulate.jl`
     + simulate_raster()
-    + simulate_vector()
+    + simulate_shapes()
+    + simulate_layout()
 - `io.jl`
     + load_raster()
-    + load_hyperspec()
-    + load_pointcloud()
+    + load_shapes_and_layout()
+    + output_fname()
+    + write_raster_and_shapefiles()
 - `preprocess.jl`
     + calibrate_reflectance()
     + align_modalities()
@@ -22,3 +24,8 @@
     + compute_indices()
     + summarize_plot_features()
 
+## Dev stuff
+
+```shell
+julia +1.10 --threads=23,1 --project=. --load test/interactive_prelude.jl
+```
