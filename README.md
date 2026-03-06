@@ -28,4 +28,5 @@
 
 ```shell
 julia +1.10 --threads=23,1 --project=. --load test/interactive_prelude.jl
+time julia +1.10 --threads=24 --project=.  test/cli_tester.jl
 ```
