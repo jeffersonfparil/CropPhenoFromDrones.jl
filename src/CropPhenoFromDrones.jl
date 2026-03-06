@@ -6,18 +6,19 @@ using Rasters # Raster I/O
 using GeoDataFrames # Shapefile I/O and works with DataFrames.jl
 using Random, StatsBase, Distributions
 using CSV, DataFrames, Dates
+using ProgressMeter
 
 include("simulate.jl")
-export simulate_raster, simulate_shapes, simulate_layout
+export simulate_raster, simulate_shapes, simulate_layout, simulate
 
 include("io.jl")
-export load_raster,
-    load_shapes_and_layout, output_fname, write_raster, write_shapes, write_layout
+export output_fname, write_raster, write_shapes, write_layout
+export load_raster, load_shapes_merge_layout
 
 include("preprocess.jl")
-calibrate_reflectance, align_modalities, generate_chm, mask_plots
+export calibrate_reflectance, align_modalities, generate_chm, mask_plots
 
 include("phenotype.jl")
-compute_indices, summarize_plot_features
+export compute_indices, summarize_plot_features
 
 end
