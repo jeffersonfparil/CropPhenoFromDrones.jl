@@ -291,7 +291,7 @@ A 4-tuple:
 
 # Examples
 ```jldoctest; setup=:(using CropPhenoFromDrones, StatsBase, DataFrames, ArchGDAL, Rasters)
-julia> channels, df_shapes, df_layout, fnames = simulate(overwrite=true);
+julia> channels, df_shapes, df_layout, df_phenotypes, fnames = simulate(overwrite=true);
 
 julia> first(channels)[end] isa Raster
 true
@@ -302,7 +302,7 @@ true
 julia> nrow(df_shapes) == nrow(df_layout)
 true
 
-julia> length(fnames) == 9
+julia> length(fnames) == 10
 true
 
 julia> sum(.!isnothing.(match.(Regex(".tiff"), fnames))) == 4
@@ -333,7 +333,7 @@ function simulate(;
     overwrite::Bool = false,
     seed::Int64 = 42,
     verbose::Bool = false,
-)::Tuple{Dict{String,Raster},DataFrame,DataFrame,Union{Nothing,Vector{String}}}
+)::Tuple{Dict{String,Raster},DataFrame,DataFrame,DataFrame,Union{Nothing,Vector{String}}}
     # lon_ini::Float64=25.0; lon_fin::Float64=30.0; lon_step::Float64=1.0; lat_ini::Float64=25.0; lat_fin::Float64=30.0; lat_step::Float64=1.0; EPSG_code::Int64=32754; n_time_points::Int64=1; μ::Float64 = 0.0; σ::Float64 = 1.0; seed::Int64 = 42; bands::Vector{String}=["red", "green", "blue", "nir"]; save::Bool = true; fname_prefix::String = "simulated"; overwrite::Bool = true; seed::Int64 = 42; verbose::Bool=false
     pb = verbose ? ProgressMeter.Progress(length(bands), "Simulating the raster") : nothing
     channels::Dict{String,Raster} = Dict()
@@ -404,5 +404,5 @@ function simulate(;
         nothing
     end
     # Output
-    (channels, df_shapes, df_layout, fnames)
+    (channels, df_shapes, df_layout, df_phenotypes, fnames)
 end
