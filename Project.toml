@@ -1,7 +1,7 @@
 name = "CropPhenoFromDrones"
 uuid = "1980905c-5a30-4ba1-8d5b-a530af7a581f"
-authors = ["jeffersonparil@gmail.com"]
 version = "1.0.0-DEV"
+authors = ["jeffersonparil@gmail.com"]
 
 [deps]
 ArchGDAL = "c9ce4bd3-c3d5-55b8-8973-c0e20141b8c3"
@@ -22,6 +22,7 @@ ArchGDAL = "0.10.11"
 CSV = "0.10.16"
 DataFrames = "1.8.1"
 Dates = "1.10.10"
+Distributions = "0.25.123"
 Documenter = "1.17.0"
 GeoDataFrames = "0.4.2"
 JuliaFormatter = "2.3.0"

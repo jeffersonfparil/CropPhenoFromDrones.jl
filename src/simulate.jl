@@ -111,18 +111,18 @@ The function assumes a regular raster grid, presence of ArchGDAL and GeoDataFram
 ```jldoctest; setup=:(using CropPhenoFromDrones, StatsBase, DataFrames, ArchGDAL, Rasters)
 julia> raster = simulate_raster();
 
-julia> df = simulate_shapes(raster);
+julia> df_shapes = simulate_shapes(raster);
 
-julia> prod(size(raster.data) .- 1) == nrow(df)
+julia> prod(size(raster.data) .- 1) == nrow(df_shapes)
 true
 
-julia> names(df) == sort(["id", "geometry"])
+julia> names(df_shapes) == sort(["id", "geometry"])
 true
 
-julia> typeof(df.id) == Vector{String}
+julia> typeof(df_shapes.id) == Vector{String}
 true
 
-julia> typeof(df.geometry) == Vector{ArchGDAL.IGeometry{ArchGDAL.wkbPolygon}}
+julia> typeof(df_shapes.geometry) == Vector{ArchGDAL.IGeometry{ArchGDAL.wkbPolygon}}
 true
 ```
 """
@@ -143,23 +143,23 @@ function simulate_shapes(raster::Raster)::DataFrame
         end
     end
     polygons = ArchGDAL.createpolygon.(coordinates)
-    df = DataFrame(id = string.("plot", 1:length(polygons)), geometry = polygons)
+    df_shapes = DataFrame(id = string.("plot", 1:length(polygons)), geometry = polygons)
     # Note: set geometry column only required if the column is not named "geometry" , also note that column names are restricted to 10 characters in the Shapefile format specs
-    # GeoDataFrames.setgeometrycolumn!(df, :geom) 
+    # GeoDataFrames.setgeometrycolumn!(df_shapes, :geom) 
     # Set coordinate reference system
-    GeoDataFrames.setcrs!(df, crs(raster))
+    GeoDataFrames.setcrs!(df_shapes, crs(raster))
     # Sort columns alphabetical to be consistent with Shapefile specs
-    select!(df, sort(propertynames(df)))
-    return df
+    select!(df_shapes, sort(propertynames(df_shapes)))
+    return df_shapes
 end
 
 """
-    simulate_layout(df::DataFrame; max_replications::Int64 = 2)::DataFrame
+    simulate_layout(df_shapes::DataFrame; max_replications::Int64 = 2)::DataFrame
 
 Generate a simple plot/layout table from a spatial DataFrame that contains an `id` field and an `geometry` field (ArchGDAL geometries). The function computes a representative centre (X, Y) for each geometry and assembles a layout DataFrame with one row per input feature.
 
 Arguments
-- `df::DataFrame`: A spatial DataFrame containing at least the columns `id` and `geometry` (ArchGDAL polygon-like geometries). The implementation expects polygon-like geometries where points at indices 0 and 2 represent opposite corners (used to compute the centre).
+- `df_shapes::DataFrame`: A spatial DataFrame containing at least the columns `id` and `geometry` (ArchGDAL polygon-like geometries). The implementation expects polygon-like geometries where points at indices 0 and 2 represent opposite corners (used to compute the centre).
 - `max_replications::Int64=2` (optional): Maximum number of replications per experimental unit. This value is used to compute the number of unique "entry" names; when `max_replications > 1` the function will create fewer unique entry labels and assign them across the rows (names are sampled for assignment).
 
 Returns
@@ -178,20 +178,20 @@ Notes
 ```jldoctest; setup=:(using CropPhenoFromDrones, StatsBase, DataFrames, ArchGDAL, Rasters)
 julia> raster = simulate_raster();
 
-julia> df = simulate_shapes(raster);
+julia> df_shapes = simulate_shapes(raster);
 
-julia> df_layout = simulate_layout(df, max_replications=3);
+julia> df_layout = simulate_layout(df_shapes, max_replications=3);
 
-julia> nrow(df) == nrow(df_layout)
+julia> nrow(df_shapes) == nrow(df_layout)
 true
 
 julia> maximum(values(countmap(df_layout.name)))
 3
 ```
 """
-function simulate_layout(df::DataFrame; max_replications::Int64 = 2)::DataFrame
-    # raster::DataFrame = simulate_raster(); df::DataFrame = simulate_shapes(raster); max_replications::Int64 = 2
-    if ("id" ∉ names(df)) || ("geometry" ∉ names(df))
+function simulate_layout(df_shapes::DataFrame; max_replications::Int64 = 2)::DataFrame
+    # df_shapes::DataFrame = simulate_raster() |> x -> simulate_shapes(x); max_replications::Int64 = 2
+    if ("id" ∉ names(df_shapes)) || ("geometry" ∉ names(df_shapes))
         throw(
             ErrorException(
                 "The input Shapefile DataFrame is missing the `id` and/or `geometry` field/s!",
@@ -203,19 +203,19 @@ function simulate_layout(df::DataFrame; max_replications::Int64 = 2)::DataFrame
     end
     row::Vector{Float64} = []
     column::Vector{Float64} = []
-    for i = 1:nrow(df)
+    for i = 1:nrow(df_shapes)
         # i = 1
-        geom = ArchGDAL.getgeom.(df.geometry, 0)[i]
+        geom = ArchGDAL.getgeom.(df_shapes.geometry, 0)[i]
         p00 = ArchGDAL.getpoint(geom, 0)
         p11 = ArchGDAL.getpoint(geom, 2)
         centre = p00 .+ (p11 .- p00) ./ 2
         push!(row, centre[1])
         push!(column, centre[2])
     end
-    n = Int64(ceil(nrow(df) / max_replications))
+    n = Int64(ceil(nrow(df_shapes) / max_replications))
     df_layout = DataFrame(
-        id = df.id,
-        name = repeat(string.("entry_", 1:n), max_replications)[1:nrow(df)],
+        id = df_shapes.id,
+        name = repeat(string.("entry_", 1:n), max_replications)[1:nrow(df_shapes)],
         row = row,
         column = column,
         block = "block_1",
@@ -223,6 +223,18 @@ function simulate_layout(df::DataFrame; max_replications::Int64 = 2)::DataFrame
     return df_layout
 end
 
+# TODO: add docstring
+function simulate_phenotypes(df_layout::DataFrame; n_traits::Int64=1)::DataFrame
+    # df_layout = simulate_raster() |> x -> simulate_shapes(x) |> x -> simulate_layout(x); n_traits::Int64=1
+    df_phenotypes = deepcopy(df_layout)
+    for i in 1:n_traits
+        trait_name = "trait_$i"
+        df_phenotypes[!, trait_name] = randn(nrow(df_layout))
+    end
+    return df_phenotypes
+end
+
+# TODO: update docstring
 """
     simulate(;
         lon_ini::Float64 = 25.0,
@@ -315,6 +327,7 @@ function simulate(;
     μ::Float64 = 0.0,
     σ::Float64 = 1.0,
     bands::Vector{String} = ["red", "green", "blue", "nir"],
+    n_traits::Int64 = 1,
     save::Bool = true,
     fname_prefix::String = "simulated",
     overwrite::Bool = false,
@@ -345,13 +358,15 @@ function simulate(;
     df_shapes = simulate_shapes(channels[bands[1]])
     verbose ? println("Simulating layout...") : nothing
     df_layout = simulate_layout(df_shapes)
+    verbose ? println("Simulating phenotypes...") : nothing
+    df_phenotypes = simulate_phenotypes(df_layout, n_traits=n_traits)
     # Save individual tiffs per band (GeRasters) and also the shapes (GeoVectors) and layouts (field layout information mapping the entry or genotype or cultivar names with the plot ids in the Shapefile)
     fnames::Union{Nothing,Vector{String}} = if save
         pb =
             verbose ?
             ProgressMeter.Progress(
                 length(bands) + 2,
-                "Saving the raster/s, shapes, and layout",
+                "Saving the raster/s, shapes, layout, and phenotypes...",
             ) : nothing
         fnames = []
         for (channel, raster) in channels
@@ -376,6 +391,13 @@ function simulate(;
         )
         verbose ? ProgressMeter.next!(pb) : nothing
         push!(fnames, fname_tsv)
+        verbose ? ProgressMeter.next!(pb) : nothing
+        fname_phenotypes = let
+            fname_phenotypes = "$fname_prefix-phenotypes.tsv"
+            CSV.write(fname_phenotypes, df_phenotypes)
+            fname_phenotypes
+        end
+        push!(fnames, fname_phenotypes)
         verbose ? ProgressMeter.finish!(pb) : nothing
         fnames
     else

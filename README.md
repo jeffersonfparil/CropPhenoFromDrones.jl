@@ -7,22 +7,26 @@
 ## Planned architecture
 
 - `simulate.jl`
-    + simulate_raster()
-    + simulate_shapes()
-    + simulate_layout()
+    + simulate_raster
+    + simulate_shapes
+    + simulate_layout
+    + simulate
 - `io.jl`
-    + load_raster()
-    + load_shapes_and_layout()
-    + output_fname()
-    + write_raster_and_shapefiles()
+    + output_fname
+    + write_raster
+    + write_shapes
+    + write_layout
+    + load_raster
+    + load_shapes_merge_layout
 - `preprocess.jl`
-    + calibrate_reflectance()
-    + align_modalities()
-    + generate_chm()
-    + mask_plots()
+    + calibrate_reflectance
+    + align_modalities
+    + generate_chm
+    + mask_plots
 - `phenotype.jl`
-    + compute_indices()
-    + summarize_plot_features()
+    + compute_indices
+    + summarize_plot_features
+
 
 ## Dev stuff
 
