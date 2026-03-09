@@ -8,12 +8,13 @@ using Random, StatsBase, Distributions
 using CSV, DataFrames, Dates
 using ProgressMeter
 
-include("simulate.jl")
-export simulate_raster, simulate_shapes, simulate_layout, simulate
-
 include("io.jl")
-export output_fname, write_raster, write_shapes, write_layout
+export Data
+export output_fname, write_raster, write_shapes, write_layout, write_data
 export load_raster, load_shapes_merge_layout
+
+include("simulate.jl")
+export simulate_raster, simulate_shapes, simulate_layout, simulate_phenotypes, simulate
 
 include("preprocess.jl")
 export calibrate_reflectance, align_modalities, generate_chm, mask_plots

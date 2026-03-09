@@ -1,4 +1,47 @@
-# TODO: docstring and tests
+struct Data
+    channels::Dict{String,Raster}
+    df_shapes::DataFrame
+    df_layout::DataFrame
+    df_phenotypes::DataFrame
+    fnames_channels::Vector{String}
+    fnames_shapes::Vector{String}
+    fname_layout::String
+    fname_phenotypes::String
+    function Data(;
+        channels::Dict{String,Raster},
+        df_shapes::DataFrame,
+        df_layout::DataFrame,
+        df_phenotypes::DataFrame,
+        fnames_channels::Union{Nothing,Vector{String}}=nothing,
+        fnames_shapes::Union{Nothing,Vector{String}}=nothing,
+        fname_layout::Union{Nothing,String}=nothing,
+        fname_phenotypes::Union{Nothing,String}=nothing,
+    )::Data
+        tmp_date = Dates.now()
+        fnames_channels = if isnothing(fnames_channels)
+            ["tmp-$tmp_date-$channel.tiff" for (channel, raster) in channels]
+        else
+            fnames_channels
+        end
+        fnames_shapes = if isnothing(fnames_shapes)
+            ["tmp-$tmp_date.$suffix" for suffix in ["shp", "shx", "prj", "dbf"]]
+        else
+            fnames_shapes
+        end
+        fname_layout = if isnothing(fname_layout)
+            "tmp-$tmp_date-layout.tsv"
+        else
+            fname_layout
+        end
+        fname_phenotypes = if isnothing(fname_phenotypes)
+            "tmp-$tmp_date-phenotypes.tsv"
+        else
+            fname_phenotypes
+        end
+        new(channels, df_shapes, df_layout, df_phenotypes, fnames_channels, fnames_shapes, fname_layout, fname_phenotypes)
+    end
+end
+
 function output_fname(;
     path::String = "",
     default_prefix::String = "simulated",
@@ -31,25 +74,6 @@ function output_fname(;
     end
 end
 
-"""
-    write_raster(raster::Raster; path::String, overwrite::Bool=false)::String
-
-Write a Raster to disk as a GeoTIFF and return the written filepath.
-# Arguments
-- raster::Raster is the raster to write; path::String is the desired output filepath; overwrite::Bool indicates whether to replace an existing file.
-# Returns
-- The full path of the written GeoTIFF as a String.
-# Notes
-- The function resolves the final filename using output_fname and writes the data with Rasters.write, so ensure the provided raster is compatible with Rasters.jl and that necessary file drivers are available.
-
-# Example
-```jldoctest; setup=:(using CropPhenoFromDrones, StatsBase, DataFrames, ArchGDAL, Rasters)
-julia> raster = simulate_raster();
-
-julia> write_raster(raster, path="simulated.tiff", overwrite=true) |> basename
-"simulated.tiff"
-```
-"""
 function write_raster(raster::Raster; path::String, overwrite::Bool = false)::String
     # raster = simulate_raster(); path = "simulated-red.tiff"; overwrite = true;
     fname_tiff = output_fname(path = path, overwrite = overwrite)
@@ -57,25 +81,6 @@ function write_raster(raster::Raster; path::String, overwrite::Bool = false)::St
     fname_tiff
 end
 
-""" 
-    write_shapes(df_shapes::DataFrame; path::String, overwrite::Bool=false)::String
-
-Write a DataFrame of geometries and attributes to a shapefile and return the written filepath.
-# Arguments
-- df_shapes::DataFrame is the GeoDataFrame-like table of shapes and attributes to write; path::String is the desired output filepath; overwrite::Bool indicates whether to replace an existing file.
-# Returns
-- The full path of the written shapefile as a String.
-# Notes
-- The function uses output_fname to compute the destination filename and GeoDataFrames.write to perform the write, so ensure the DataFrame conforms to the expected geometry column and CRS conventions.
-
-# Example
-```jldoctest; setup=:(using CropPhenoFromDrones, StatsBase, DataFrames, ArchGDAL, Rasters)
-julia> df_shapes = simulate_raster() |> x -> simulate_shapes(x);
-
-julia> write_shapes(df_shapes, path="simulated.shp", overwrite=true) |> basename
-"simulated.shp"
-```
-"""
 function write_shapes(df_shapes::DataFrame; path::String, overwrite::Bool = false)::String
     # df_shapes = simulate_shapes(simulate_raster()); path = "simulated.shp"; overwrite = true;
     fname_shp = output_fname(path = path, overwrite = overwrite)
@@ -83,25 +88,6 @@ function write_shapes(df_shapes::DataFrame; path::String, overwrite::Bool = fals
     fname_shp
 end
 
-"""
-    write_layout(df_layout::DataFrame; path::String, overwrite::Bool=false)::String
-
-Write a layout DataFrame to a tab-separated values (TSV) file and return the written filepath.
-# Arguments
-- df_layout::DataFrame contains the layout rows and columns to serialize; path::String is the desired output filepath; overwrite::Bool indicates whether to replace an existing file.
-# Returns
-- The full path of the written TSV file as a String.
-# Notes
-- The function uses output_fname to resolve the filename and CSV.write with a tab delimiter to write the table, so ensure column types are serializable by CSV.
-
-# Example
-```jldoctest; setup=:(using CropPhenoFromDrones, StatsBase, DataFrames, ArchGDAL, Rasters)
-julia> df_layout = simulate_raster() |> x -> simulate_shapes(x) |> x -> simulate_layout(x);
-
-julia> write_layout(df_layout, path="simulated-layout.tsv", overwrite=true) |> basename
-"simulated-layout.tsv"
-```
-"""
 function write_layout(df_layout::DataFrame; path::String, overwrite::Bool = false)::String
     # df_layout = simulate_layout(simulate_shapes(simulate_raster())); path = "simulated-layout.tsv"; overwrite = true;
     fname_tsv = output_fname(path = path, overwrite = overwrite)
@@ -109,92 +95,35 @@ function write_layout(df_layout::DataFrame; path::String, overwrite::Bool = fals
     fname_tsv
 end
 
-"""
-    load_raster(path::String)::Raster
+function write_data(data::Data; overwrite::Bool = false)::Nothing
+    # Save individual tiffs per band (GeRasters) and also the shapes (GeoVectors) and layouts (field layout information mapping the entry or genotype or cultivar names with the plot ids in the Shapefile)
+    for (channel, raster) in data.channels
+        fname_tiff = write_raster(
+            raster,
+            path = data.fnames_channels[.!isnothing.(match.(Regex(channel), data.fnames_channels))][1],
+            overwrite = overwrite,
+        )
+    end
+    fname_shp = write_shapes(
+        data.df_shapes, 
+        path = data.fnames_shapes[.!isnothing.(match.(Regex(".shp\$"), data.fnames_shapes))][1], 
+        overwrite = overwrite
+    )
+    fname_tsv = write_layout(
+        data.df_layout,
+        path = data.fname_layout,
+        overwrite = overwrite,
+    )
+    CSV.write(data.fname_phenotypes, data.df_phenotypes)
+    nothing
+end
 
-Load a raster from the file at the specified path and return a Raster object.
+##########################################################################################
 
-# Argument
-- path::String: Path to the raster file to be loaded.
-
-# Returns
-- Raster: A Raster instance constructed from the file at path.
-
-# Throws
-- an error if the file does not exist or cannot be opened.
-
-# Notes
-- This function is a thin wrapper around the Raster constructor and performs no additional validation or processing.
-
-# Example
-```jldoctest; setup=:(using CropPhenoFromDrones, StatsBase, DataFrames, ArchGDAL, Rasters)
-julia> raster = simulate_raster();
-
-julia> fname_raster = write_raster(raster, path="simulated.tiff", overwrite=true);
-
-julia> raster_reloaded = load_raster(fname_raster);
-
-julia> raster_reloaded == raster
-true
-```
-"""
 function load_raster(path::String)::Raster
     Raster(path)
 end
 
-"""
-    load_shapes_merge_layout(
-        fname_shapes::String;
-        fname_layout::Union{Nothing,String}=nothing,
-        id::String="id",
-        name::String="name",
-        remove_rows_with_missing::Bool=true,
-    )::DataFrame
-
-Load shapes from a geospatial file and optionally merge them with a layout table by id.
-
-# Arguments
-- fname_shapes::String: path to the shapes file that GeoDataFrames.read can consume, typically a Shapefile.
-- fname_layout::Union{Nothing,String}=nothing: optional path to a CSV/TSV layout table to merge with the shapes; pass nothing to skip merging.
-- id::String="id": column name used as the join key in both the shapes and layout tables.
-- name::String="name": column name in the layout containing entry or genotype names that will be renamed to "name" to satisfy Shapefile field-length limits.
-- remove_rows_with_missing::Bool=true: if true, disallowmissing! is applied to the merged DataFrame to remove or convert missing values following the join.
-
-# Returns
-- DataFrame containing the shapes read from fname_shapes if fname_layout is nothing, otherwise the left-joined DataFrame of shapes and layout on the id column with layout fields appended.
-
-# Errors
-- Throws an ErrorException if the id column is absent in the shapes file.
-- Throws an ErrorException if either the id or the specified name column is absent in the layout file when a layout file is provided.
-
-# Behaviour and notes
-- The function uses GeoDataFrames.read to read geospatial shapes and CSV.read to read the layout table.
-- When a layout is provided the specified name column is renamed to "name" because Shapefile field names are limited in length.
-- All columns in the layout that contain AbstractString values are converted to plain String to improve Shapefile compatibility.
-- The merge is a left join on the id column and makeunique=true is used to avoid duplicate column names.
-- If remove_rows_with_missing is true disallowmissing! is called on the merged DataFrame which may convert missing to non-missing where possible or error if conversion is not possible.
-
-# Example
-```jldoctest; setup=:(using CropPhenoFromDrones, StatsBase, DataFrames, ArchGDAL, Rasters)
-julia> df_shapes = simulate_raster() |> x -> simulate_shapes(x);
-
-julia> df_layout = simulate_layout(df_shapes);
-
-julia> fname_shapes = write_shapes(df_shapes, path="simulated.shp", overwrite=true);
-
-julia> fname_layout = write_layout(df_layout, path="simulated-layout.tsv", overwrite=true);
-
-julia> df_shapes_reloaded = load_shapes_merge_layout(fname_shapes);
-
-julia> df_shapes_reloaded == df_shapes
-true
-
-julia> df_shapes_merged_layout = load_shapes_merge_layout(fname_shapes, fname_layout=fname_layout, id="id", name="name");
-
-julia> names(df_shapes_merged_layout) == sort(unique(vcat(names(df_shapes), names(df_layout))))
-true
-```
-"""
 function load_shapes_merge_layout(
     fname_shapes::String;
     fname_layout::Union{Nothing,String} = nothing,
