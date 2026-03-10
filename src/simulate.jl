@@ -1,35 +1,41 @@
 function simulate_raster(;
-    lon_ini::Float64 = 25.0,
-    lon_fin::Float64 = 30.0,
-    lon_step::Float64 = 1.0,
-    lat_ini::Float64 = 25.0,
-    lat_fin::Float64 = 30.0,
-    lat_step::Float64 = 1.0,
-    EPSG_code::Int64 = 32754, # used in the Fan's 2023 GeoRaster data
-    n_time_points::Int64 = 1,
-    μ::Float64 = 0.0,
-    σ::Float64 = 1.0,
-    seed::Int64 = 42,
+    lon_ini::Float64=142.00,
+    lon_fin::Float64=143.00,
+    lon_step::Float64=0.001,
+    lat_ini::Float64=-35.00,
+    lat_fin::Float64=-36.00,
+    lat_step::Float64=0.001,
+    EPSG_code::Int64=32754, # used in the Fan's 2023 GeoRaster data
+    n_time_points::Int64=1,
+    μ::Float64=0.0,
+    σ::Float64=1.0,
+    seed::Int64=42,
 )::Raster
-    # lon_ini::Float64=25.0; lon_fin::Float64=30.0; lon_step::Float64=1.0; lat_ini::Float64=25.0; lat_fin::Float64=30.0; lat_step::Float64=1.0; EPSG_code::Int64=32754; n_time_points::Int64=1; μ::Float64 = 0.0; σ::Float64 = 1.0; seed::Int64 = 42
-    lon, lat =
-        Rasters.X(lon_ini:lon_step:lon_fin), reverse(Rasters.Y(lat_ini:lat_step:lat_fin)) # reversing Y for north-up coordinates
+    # lon_ini::Float64=142.00; lon_fin::Float64=143.00; lon_step::Float64=0.001; lat_ini::Float64=-35.00; lat_fin::Float64=-36.00; lat_step::Float64=0.001; EPSG_code::Int64=32754; n_time_points::Int64=1; μ::Float64 = 0.0; σ::Float64 = 1.0; seed::Int64 = 42
+    lon = Rasters.X(minimum([lon_ini, lon_fin]):lon_step:maximum([lon_ini, lon_fin]))
+    lat = reverse(Rasters.Y(minimum([lat_ini, lat_fin]):lat_step:maximum([lat_ini, lat_fin]))) # we reversed lat because we opt to use the conventional north-up orientation
     N = Distributions.Normal(μ, σ)
     Random.seed!(seed)
+    R::Array{Union{Missing,Float64}} = [;] # declare that the raster data can be missing or Float64
     raster = if n_time_points > 1
         ti = Ti([Dates.now()])
-        Rasters.Raster(rand(N, lon, lat, ti), crs = EPSG(EPSG_code))
+        R = rand(N, length(lon), length(lat), 1)
+        Rasters.Raster(DimArray(R, (lon, lat, ti)), crs=EPSG(EPSG_code))
     else
-        Rasters.Raster(rand(N, lon, lat), crs = EPSG(EPSG_code))
+        R = rand(N, length(lon), length(lat))
+        Rasters.Raster(DimArray(R, (lon, lat)), crs=EPSG(EPSG_code))
     end
+    # fig = CairoMakie.heatmap(raster; axis=(; aspect=GeoMakie.DataAspect())); CairoMakie.save("test.png", fig)
     return raster
 end
 
-function simulate_shapes(raster::Raster)::DataFrame
-    # raster::Raster = simulate_raster()
+function simulate_shapes(raster::Raster; rows::Int64=10, columns::Int64=10)::DataFrame
+    # raster::Raster = simulate_raster(); rows::Int64=10; columns::Int64=10
+    x_step = (dims(raster, Rasters.X)[end] - dims(raster, Rasters.X)[1]) / columns
+    y_step = (dims(raster, Rasters.Y)[end] - dims(raster, Rasters.Y)[1]) / rows
+    xs = collect(dims(raster, Rasters.X)[1]:x_step:dims(raster, Rasters.X)[end])
+    ys = collect(dims(raster, Rasters.Y)[1]:y_step:dims(raster, Rasters.Y)[end])
     coordinates::Vector{Vector{Tuple{Float64,Float64}}} = []
-    xs = collect(dims(raster, Rasters.X).val)
-    ys = collect(dims(raster, Rasters.Y).val)
     for i = 1:(length(xs)-1)
         for j = 1:(length(ys)-1)
             polygon = []
@@ -42,7 +48,7 @@ function simulate_shapes(raster::Raster)::DataFrame
         end
     end
     polygons = ArchGDAL.createpolygon.(coordinates)
-    df_shapes = DataFrame(id = string.("plot", 1:length(polygons)), geometry = polygons)
+    df_shapes = DataFrame(id=string.("plot", 1:length(polygons)), geometry=polygons)
     # Note: set geometry column only required if the column is not named "geometry" , also note that column names are restricted to 10 characters in the Shapefile format specs
     # GeoDataFrames.setgeometrycolumn!(df_shapes, :geom) 
     # Set coordinate reference system
@@ -52,8 +58,11 @@ function simulate_shapes(raster::Raster)::DataFrame
     return df_shapes
 end
 
-function simulate_layout(df_shapes::DataFrame; max_replications::Int64 = 2)::DataFrame
-    # df_shapes::DataFrame = simulate_raster() |> x -> simulate_shapes(x); max_replications::Int64 = 2
+function simulate_phenotypes(df_shapes::DataFrame; max_replications::Int64=2, n_traits::Int64=1, seed::Int64=42, channels::Union{Nothing,Dict{String,Raster}}=nothing)::DataFrame
+    # channels = Dict("red" => simulate_raster(), "green" => simulate_raster(), "blue" => simulate_raster()); df_shapes = simulate_shapes(channels["red"]); max_replications::Int64=2; n_traits::Int64=1; seed::Int64=42
+    Random.seed!(seed)
+    N = Distributions.Normal()
+    # Simulate layout
     if ("id" ∉ names(df_shapes)) || ("geometry" ∉ names(df_shapes))
         throw(
             ErrorException(
@@ -75,82 +84,92 @@ function simulate_layout(df_shapes::DataFrame; max_replications::Int64 = 2)::Dat
         push!(row, centre[1])
         push!(column, centre[2])
     end
+    # Instantiate the phenotypes dataframe
     n = Int64(ceil(nrow(df_shapes) / max_replications))
-    df_layout = DataFrame(
-        id = df_shapes.id,
-        name = repeat(string.("entry_", 1:n), max_replications)[1:nrow(df_shapes)],
-        row = row,
-        column = column,
-        block = "block_1",
+    df_phenotypes = DataFrame(
+        id=df_shapes.id,
+        name=repeat(string.("entry_", 1:n), max_replications)[1:nrow(df_shapes)],
+        row=row,
+        column=column,
+        block="block_1",
     )
-    return df_layout
-end
-
-function simulate_phenotypes(df_layout::DataFrame; n_traits::Int64=1)::DataFrame
-    # df_layout = simulate_raster() |> x -> simulate_shapes(x) |> x -> simulate_layout(x); n_traits::Int64=1
-    df_phenotypes = deepcopy(df_layout)
-    for i in 1:n_traits
-        trait_name = "trait_$i"
-        df_phenotypes[!, trait_name] = randn(nrow(df_layout))
+    if isnothing(channels) && isnothing(df_shapes)
+        for i in 1:n_traits
+            trait_name = "trait_$i"
+            df_phenotypes[!, trait_name] = randn(nrow(df_layout))
+        end
+    elseif !isnothing(channels) && isnothing(df_shapes)
+        throw(ErrorException("If you wish to use the simulated channels you also need to specify the shapes."))
+    elseif isnothing(channels) && !isnothing(df_shapes)
+        throw(ErrorException("If you wish to use the simulated shapes you also need to specify the channels."))
+    else
+        for i in 1:n_traits
+            # i = 1
+            df_phenotypes[!, "trait_$i"] .= 0.0
+            zs = [
+                [mean(skipmissing(Rasters.crop(raster, to=df_shapes.geometry[j]).data)) for j in 1:nrow(df_shapes)]
+                for (channel, raster) in channels
+            ]
+            for z in zs
+                df_phenotypes[!, "trait_$i"] += ((i * rand(N)) .* z) + rand(N, length(z))
+            end
+        end
     end
     return df_phenotypes
 end
 
-function simulate(;
-    lon_ini::Float64 = 25.0,
-    lon_fin::Float64 = 30.0,
-    lon_step::Float64 = 1.0,
-    lat_ini::Float64 = 25.0,
-    lat_fin::Float64 = 30.0,
-    lat_step::Float64 = 1.0,
-    EPSG_code::Int64 = 32754, # used in the Fan's 2023 GeoRaster data
-    n_time_points::Int64 = 1,
-    μ::Float64 = 0.0,
-    σ::Float64 = 1.0,
-    bands::Vector{String} = ["red", "green", "blue", "nir"],
-    n_traits::Int64 = 1,
-    save::Bool = true,
-    fname_prefix::String = "simulated",
-    overwrite::Bool = false,
-    seed::Int64 = 42,
-    verbose::Bool = false,
+function simulate_data(;
+    lon_ini::Float64=142.00,
+    lon_fin::Float64=143.00,
+    lon_step::Float64=0.001,
+    lat_ini::Float64=-35.00,
+    lat_fin::Float64=-36.00,
+    lat_step::Float64=0.001,
+    EPSG_code::Int64=32754, # used in the Fan's 2023 GeoRaster data
+    n_time_points::Int64=1,
+    μ::Float64=0.0,
+    σ::Float64=1.0,
+    bands::Vector{String}=["red", "green", "blue", "nir"],
+    n_traits::Int64=1,
+    save::Bool=true,
+    overwrite::Bool=false,
+    seed::Int64=42,
+    verbose::Bool=true,
 )::Data
-    # lon_ini::Float64=25.0; lon_fin::Float64=30.0; lon_step::Float64=1.0; lat_ini::Float64=25.0; lat_fin::Float64=30.0; lat_step::Float64=1.0; EPSG_code::Int64=32754; n_time_points::Int64=1; μ::Float64 = 0.0; σ::Float64 = 1.0; seed::Int64 = 42; bands::Vector{String}=["red", "green", "blue", "nir"]; n_traits::Int64 = 1; save::Bool = true; fname_prefix::String = "simulated"; overwrite::Bool = true; seed::Int64 = 42; verbose::Bool=false
+    # lon_ini::Float64=142.00; lon_fin::Float64=143.00; lon_step::Float64=0.001; lat_ini::Float64=-35.00; lat_fin::Float64=-36.00; lat_step::Float64=0.001; EPSG_code::Int64=32754; n_time_points::Int64=1; μ::Float64 = 0.0; σ::Float64 = 1.0; seed::Int64 = 42; bands::Vector{String}=["red", "green", "blue", "nir"]; n_traits::Int64 = 1; save::Bool = true; fname_prefix::String = "simulated"; overwrite::Bool = true; seed::Int64 = 42; verbose::Bool=false
+    Random.seed!(seed)
     pb = verbose ? ProgressMeter.Progress(length(bands), "Simulating the raster") : nothing
     channels::Dict{String,Raster} = Dict()
     for id in bands
         channels[id] = simulate_raster(
-            lon_ini = lon_ini,
-            lon_fin = lon_fin,
-            lon_step = lon_step,
-            lat_ini = lat_ini,
-            lat_fin = lat_fin,
-            lat_step = lat_step,
-            EPSG_code = EPSG_code,
-            n_time_points = n_time_points,
-            μ = μ,
-            σ = σ,
-            seed = seed,
+            lon_ini=lon_ini,
+            lon_fin=lon_fin,
+            lon_step=lon_step,
+            lat_ini=lat_ini,
+            lat_fin=lat_fin,
+            lat_step=lat_step,
+            EPSG_code=EPSG_code,
+            n_time_points=n_time_points,
+            μ=μ,
+            σ=σ,
+            seed=Int64(round(rand() * 10_000)),
         )
         verbose ? ProgressMeter.next!(pb) : nothing
     end
-    verbose ? ProgressMeter.finish!(pb) : nothing
     verbose ? println("Simulating shapes (plot ROIs)...") : nothing
     df_shapes = simulate_shapes(channels[bands[1]])
-    verbose ? println("Simulating layout...") : nothing
-    df_layout = simulate_layout(df_shapes)
     verbose ? println("Simulating phenotypes...") : nothing
-    df_phenotypes = simulate_phenotypes(df_layout, n_traits=n_traits)
+    df_phenotypes = simulate_phenotypes(df_shapes, n_traits=n_traits, channels=channels, seed=Int64(round(rand() * 10_000)))
+    verbose ? ProgressMeter.finish!(pb) : nothing
     # Data
     data = Data(
         channels=channels,
         df_shapes=df_shapes,
-        df_layout=df_layout,
         df_phenotypes=df_phenotypes,
     )
     # Save individual tiffs per band (GeRasters) and also the shapes (GeoVectors) and layouts (field layout information mapping the entry or genotype or cultivar names with the plot ids in the Shapefile)
     if save
-        write_data(data, overwrite = overwrite)
+        write_data(data, overwrite=overwrite)
     end
     # Output
     return data

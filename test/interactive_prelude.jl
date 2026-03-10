@@ -7,3 +7,4 @@ using GeoDataFrames # Shapefile I/O and works with DataFrames.jl
 using Random, StatsBase, Distributions
 using CSV, DataFrames, Dates
 using ProgressMeter
+using CairoMakie, GeoMakie

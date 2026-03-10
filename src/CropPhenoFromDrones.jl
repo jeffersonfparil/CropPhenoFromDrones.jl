@@ -7,17 +7,15 @@ using GeoDataFrames # Shapefile I/O and works with DataFrames.jl
 using Random, StatsBase, Distributions
 using CSV, DataFrames, Dates
 using ProgressMeter
+using CairoMakie, GeoMakie
 
 include("io.jl")
 export Data
-export output_fname, write_raster, write_shapes, write_layout, write_data
-export load_raster, load_shapes_merge_layout
+export output_fname, write_raster, write_shapes, write_phenotypes, write_data
+export load_raster, load_shapes_phenotypes, check_dimensions, load_data
 
 include("simulate.jl")
-export simulate_raster, simulate_shapes, simulate_layout, simulate_phenotypes, simulate
-
-include("preprocess.jl")
-export calibrate_reflectance, align_modalities, generate_chm, mask_plots
+export simulate_raster, simulate_shapes, simulate_phenotypes, simulate_data
 
 include("phenotype.jl")
 export compute_indices, summarize_plot_features
