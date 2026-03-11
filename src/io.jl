@@ -218,6 +218,13 @@ function check_dimensions(data::Data)::Nothing
             throw(ErrorException("At least one plot is beyond the area defined in the raster file/s (see $roi)."))
         end
     end
+    # Check if the id columns are present in df_phenotypes
+    if "id" ∉ names(data.df_shapes)
+        throw(ErrorException("Missing `id` column in df_shapes"))
+    end
+    if "id" ∉ names(data.df_phenotypes)
+        throw(ErrorException("Missing `id` column in df_phenotypes"))
+    end
     nothing
 end
 
