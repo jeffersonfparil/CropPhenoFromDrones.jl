@@ -1,7 +1,7 @@
 name = "CropPhenoFromDrones"
 uuid = "1980905c-5a30-4ba1-8d5b-a530af7a581f"
-authors = ["jeffersonparil@gmail.com"]
 version = "1.0.0-DEV"
+authors = ["jeffersonparil@gmail.com"]
 
 [deps]
 ArchGDAL = "c9ce4bd3-c3d5-55b8-8973-c0e20141b8c3"
@@ -22,6 +22,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 [compat]
 ArchGDAL = "0.10.11"
 CSV = "0.10.16"
+CairoMakie = "0.15"
 DataFrames = "1.8.1"
 Dates = "1.10.10"
 Distributions = "0.25.123"
