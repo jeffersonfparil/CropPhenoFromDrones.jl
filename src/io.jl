@@ -168,7 +168,7 @@ function load_shapes_phenotypes(
         # Set all AbstractString into simply String for compatibility with Shapefile specs
         for f in names(df_phenotypes)
             # f = names(df_phenotypes)[1]
-            bool::Bool = false
+            bool = false
             for x in df_phenotypes[!, f]
                 if x isa AbstractString
                     bool = true
@@ -186,7 +186,12 @@ function load_shapes_phenotypes(
         return df_shapes
     else
         df_merged = leftjoin(df_shapes, df_phenotypes, on=[:id], makeunique=true)
-        remove_rows_with_missing ? disallowmissing!(df_merged) : nothing
+        df_merged = if remove_rows_with_missing
+            idx = findall(sum(Matrix(ismissing.(df_merged)), dims=2)[:, 1] .== 0)
+            disallowmissing(df_merged[idx, :])
+        else
+            df_merged
+        end
         # Sort columns alphabetical to be consistent with Shapefile specs
         select!(df_merged, sort(propertynames(df_merged)))
         return df_merged
@@ -234,14 +239,35 @@ function load_data(;
     fname_phenotypes::String,
     id::String="id",
     name::String="name",
-    remove_rows_with_missing::Bool=true
+    remove_rows_with_missing::Bool=true,
+    verbose::Bool=true,
 )::Data
-    # data = simulate_data(); fnames_channels = data.fnames_channels; fname_shapes = data.fnames_shapes[1]; fname_phenotypes = data.fname_phenotypes; id::String="id"; name::String="name"; remove_rows_with_missing::Bool=true
+    # data = simulate_data(); fnames_channels = data.fnames_channels; fname_shapes = data.fnames_shapes[1]; fname_phenotypes = data.fname_phenotypes; id::String="id"; name::String="name"; remove_rows_with_missing::Bool=true; verbose::Bool=true
     channels::Dict{String,Raster} = Dict()
-    for f in fnames_channels
-        channels[basename(f)] = load_raster(f)
+    splits = [vcat(split.(x, "-")...) for x in split.(basename.(fnames_channels), ".")]
+    bool = [.!isnothing.(match.(Regex("red|green|blue"), y)) for y in splits]
+    idx_key = findfirst(sum(hcat(bool...), dims=2)[:, 1] .> 0)
+    if verbose
+        pb = ProgressMeter.Progress(length(fnames_channels), "Loading rasters")
     end
-    df = load_shapes_phenotypes(fname_shapes, fname_phenotypes=fname_phenotypes, id=id, name=name, remove_rows_with_missing=remove_rows_with_missing)
+    for (i, f) in enumerate(fnames_channels)
+        # i = 2; f = fnames_channels[i]
+        key = splits[i][idx_key]
+        channels[key] = load_raster(f)
+        if verbose
+            ProgressMeter.next!(pb)
+        end
+    end
+    if verbose
+        ProgressMeter.finish!(pb)
+    end
+    df = load_shapes_phenotypes(
+        fname_shapes,
+        fname_phenotypes=fname_phenotypes,
+        id=id,
+        name=name,
+        remove_rows_with_missing=remove_rows_with_missing
+    )
     # Output
     data = Data(
         channels=channels,

@@ -5,9 +5,10 @@ using ArchGDAL # Base geospatial data core functionalities but I/O is too simpli
 using Rasters # Raster I/O
 using GeoDataFrames # Shapefile I/O and works with DataFrames.jl
 using Random, StatsBase, Distributions, LinearAlgebra
+using Turing, ReverseDiff
 using CSV, DataFrames, Dates
 using ProgressMeter
-using CairoMakie, GeoMakie
+using UnicodePlots, CairoMakie, GeoMakie
 
 include("io.jl")
 export Data
@@ -24,6 +25,6 @@ export ndvi, ndgi, ndbi, ndwi, ndri, pndvi
 export extract_features, extract_XY
 
 include("models.jl")
-export model_ols
+export Model, check_model, model_ols!, model_ridge!, model_bayesg!
 
 end

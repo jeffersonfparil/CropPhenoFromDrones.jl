@@ -5,6 +5,7 @@ using ArchGDAL # Base geospatial data core functionalities but I/O is too simpli
 using Rasters # Raster I/O
 using GeoDataFrames # Shapefile I/O and works with DataFrames.jl
 using Random, StatsBase, Distributions, LinearAlgebra
+using Turing, ReverseDiff
 using CSV, DataFrames, Dates
 using ProgressMeter
-using CairoMakie, GeoMakie
+using UnicodePlots, CairoMakie, GeoMakie

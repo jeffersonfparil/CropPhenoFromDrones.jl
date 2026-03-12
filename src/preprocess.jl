@@ -1,7 +1,10 @@
 function extract_traits_per_plot(data::Data)::DataFrame
     # data = simulate_data()
     check_dimensions(data)
-    idx_traits = findall([x ∉ ["id", "name", "row", "column", "block"] for x in names(data.df_phenotypes)])
+    bool_traits_1 = [x ∉ ["id", "name", "row", "column", "block"] for x in names(data.df_phenotypes)]
+    bool_traits_2 = [sum(isa.(data.df_phenotypes[!, x], Number)) > 0 for x in names(data.df_phenotypes)]
+    bool_traits_3 = [isnothing(match(Regex("name_|row_|column_|block_|plot_index"), x)) for x in names(data.df_phenotypes)]
+    idx_traits = findall(bool_traits_1 .&& bool_traits_2 .&& bool_traits_3)
     trait_names = if length(idx_traits) < 1
         throw(ErrorException("Missing trait names in data: $(names(data.df_phenotypes))"))
     else
@@ -171,16 +174,23 @@ function extract_features(data::Data; cor_max::Float64=0.95)::DataFrame
         i += 1
         j = i + 1
     end
+    if ncol(df_features) < 3
+        throw(ErrorException("Homogenous feature set: we have less than 2 features extracted: $(names(df_features))"))
+    end
     # Output
     df_features
 end
 
 function extract_XY(data::Data; cor_max::Float64=0.95)::Tuple{DataFrame,DataFrame}
     # data = simulate_data(); cor_max::Float64=0.95
+    check_dimensions(data)
     df_traits = extract_traits_per_plot(data)
     trait_names = names(select(df_traits, Not(:id)))
     df_features = extract_features(data, cor_max=cor_max)
     df_merged = leftjoin(df_traits, df_features, on=:id)
+    if nrow(df_merged) < 3
+        throw(ErrorException("We have less than 3 data-points"))
+    end
     (
         select(df_merged, vcat("id", trait_names)),
         select(df_merged, Not(trait_names)),
