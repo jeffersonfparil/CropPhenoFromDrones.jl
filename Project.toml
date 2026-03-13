@@ -1,7 +1,7 @@
 name = "CropPhenoFromDrones"
 uuid = "1980905c-5a30-4ba1-8d5b-a530af7a581f"
-authors = ["jeffersonparil@gmail.com"]
 version = "1.0.0-DEV"
+authors = ["jeffersonparil@gmail.com"]
 
 [deps]
 ArchGDAL = "c9ce4bd3-c3d5-55b8-8973-c0e20141b8c3"
@@ -35,6 +35,7 @@ JuliaFormatter = "2.3.0"
 ProgressMeter = "1.10.2"
 Rasters = "0.14.7"
 StatsBase = "0.34.10"
+UnicodePlots = "3"
 julia = "1.10"
 
 [extras]
