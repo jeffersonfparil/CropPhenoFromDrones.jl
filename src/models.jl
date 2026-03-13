@@ -202,10 +202,10 @@ function model_bayesg!(
     check_model(model)
     rng::TaskLocalRNG = Random.seed!(seed)
     Turing.@model function model_bayesg(x, y)
-        σ² ~ truncated(Normal(0, 100); lower=0)
-        intercept ~ Normal(0, sqrt(3))
+        σ² ~ truncated(Normal(0, 1); lower=0)
+        intercept ~ Normal(0, 1)
         nfeatures = size(x, 2)
-        coefficients ~ MvNormal(zeros(nfeatures), 10.0 * I)
+        coefficients ~ MvNormal(zeros(nfeatures), 1.0 * I)
         mu = intercept .+ x * coefficients
         return y ~ MvNormal(mu, σ² * I)
     end
@@ -248,3 +248,27 @@ end
 # model_ols!(model); println("model.R²_training=$(model.R²_training); model.R²_validation=$(model.R²_validation); model.ρ_training=$(model.ρ_training); model.ρ_validation=$(model.ρ_validation)")
 # model_ridge!(model); println("model.R²_training=$(model.R²_training); model.R²_validation=$(model.R²_validation); model.ρ_training=$(model.ρ_training); model.ρ_validation=$(model.ρ_validation)")
 # model_bayesg!(model); println("model.R²_training=$(model.R²_training); model.R²_validation=$(model.R²_validation); model.ρ_training=$(model.ρ_training); model.ρ_validation=$(model.ρ_validation)")
+# model_bayesg!(model, n_iterations=100_000, n_burnin=50_000); println("model.R²_training=$(model.R²_training); model.R²_validation=$(model.R²_validation); model.ρ_training=$(model.ρ_training); model.ρ_validation=$(model.ρ_validation)")
+
+
+function predict_missing_y(model::Model; verbose::Bool=false)::Vector{Float64}
+    # model = Model(simulate_data()); n = length(model.y); model.y[sample(1:n, Int64(ceil(0.25*n)), replace=false)] .= missing; model.idx_training = findall(.!ismissing.(model.y)); model.idx_validation = findall(ismissing.(model.y)); model_ols!(model)
+    check_model(model)
+    if isnothing(model.β)
+        throw(ErrorException("Please fit a model first before predicting the missing phenotype data"))
+    end
+    idx_missing = findall(ismissing.(model.y))
+    if length(idx_missing) == 0
+        throw(ErrorException("No missing phenotype data for trait: \"$(model.trait_name)\""))
+    end
+    n = length(idx_missing)
+    X = Float64.(hcat(ones(n), model.X[idx_missing, :]))
+    ŷ_tmp = X * model.β
+    ŷ = (ŷ_tmp .* model.σ_y) .+ model.μ_y
+    if verbose
+        println("Trait: $(model.trait_name)")
+        display(UnicodePlots.histogram(ŷ, title=model.trait_name))
+        println("μ = $(mean(ŷ)); σ = $(std(ŷ))")
+    end
+    ŷ
+end
