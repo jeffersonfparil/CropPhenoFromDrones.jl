@@ -68,6 +68,10 @@ function extract_rasters_per_plot(
     rasters_per_plot
 end
 
+function dvi(; nir, red)
+    nir - red
+end
+
 function ndvi(; nir, red)
     (nir - red) ./ (nir + red)
 end
@@ -80,7 +84,7 @@ function ndbi(; nir, blue)
     (nir - blue) ./ (nir + blue)
 end
 
-function ndwi(; nir, green)
+function gndvi(; nir, green)
     (green - nir) ./ (green + nir)
 end
 
@@ -93,14 +97,28 @@ function pndvi(; nir, red, green, blue)
     (nir - s) ./ (nir + s)
 end
 
-function extract_features(data::Data; cor_max::Float64=0.95)::DataFrame
+function osavi(; nir, red, L=0.16)
+    (1 + L) .* (nir - red) ./ (nir + red .+ L)
+end
+
+function ndre(; nir, red_edge)
+    (nir - red_edge) ./ (nir + red_edge)
+end
+
+function extract_features(
+    data::Data;
+    cor_max::Float64=0.95,
+    centroid_sampling::Vector{Bool}=[false, true],
+    border_widths::Vector{Int64}=collect(0:5),
+    indices::Vector{Symbol}=[:dvi, :ndvi, :ndgi, :ndbi, :gndvi, :ndri, :pndvi, :osavi, :ndre],
+    summary_stats::Dict{String,Function}=Dict("μ" => mean, "σ" => std),
+)::DataFrame
     # Here we don't assume each plot has the same number of pixels
-    # data = simulate_data(); cor_max::Float64=0.95
+    # data = simulate_data(); cor_max::Float64=0.95; border_widths::Vector{Int64} = collect(0:5)
     df_features = DataFrame(id=data.df_phenotypes.id)
     ϕ::Vector{Union{Missing,Float64}} = repeat([missing], nrow(df_features))
-    border_widths::Vector{Int64} = collect(0:5)
-    for centroid_sample in [false, true]
-        # centroid_sample = true
+    for centroid_sample in centroid_sampling
+        # centroid_sample = centroid_sampling[1]
         for border_units in border_widths
             # border_units = border_widths[2]
             rasters = extract_rasters_per_plot(
@@ -111,13 +129,15 @@ function extract_features(data::Data; cor_max::Float64=0.95)::DataFrame
             )
             for (channel, shapes) in rasters
                 # channel = string.(keys(rasters))[1]; shapes = rasters[channel]
-                df_features[!, "$channel|$border_units|$centroid_sample|μ"] = deepcopy(ϕ)
-                df_features[!, "$channel|$border_units|$centroid_sample|σ"] = deepcopy(ϕ)
+                for (f, _F) in summary_stats
+                    df_features[!, "$channel|$border_units|$centroid_sample|$f"] = deepcopy(ϕ)
+                end
                 for (id, raster) in shapes
                     # id = string.(keys(shapes))[1]; raster = shapes[id]
                     # fig = heatmap(raster.data); save("test.png", fig)
-                    df_features[df_features.id.==id, "$channel|$border_units|$centroid_sample|μ"] .= mean(skipmissing(raster))
-                    df_features[df_features.id.==id, "$channel|$border_units|$centroid_sample|σ"] .= std(skipmissing(raster))
+                    for (f, F) in summary_stats
+                        df_features[df_features.id.==id, "$channel|$border_units|$centroid_sample|$f"] .= F(skipmissing(raster))
+                    end
                 end
             end
             # Vegetation indices
@@ -141,23 +161,34 @@ function extract_features(data::Data; cor_max::Float64=0.95)::DataFrame
             catch
                 nothing
             end
-            if !isnothing(nir) && !isnothing(red)
+            red_edge = try
+                df_features[!, "red_edge|$border_units|$centroid_sample|μ"]
+            catch
+                nothing
+            end
+            if (:ndvi ∈ indices) && !isnothing(nir) && !isnothing(red)
                 df_features[!, "ndvi|$border_units|$centroid_sample|μ"] = ndvi.(nir=nir, red=red)
             end
-            if !isnothing(nir) && !isnothing(green)
+            if (:ndgi ∈ indices) && !isnothing(nir) && !isnothing(green)
                 df_features[!, "ndgi|$border_units|$centroid_sample|μ"] = ndgi.(nir=nir, green=green)
             end
-            if !isnothing(nir) && !isnothing(blue)
+            if (:ndbi ∈ indices) && !isnothing(nir) && !isnothing(blue)
                 df_features[!, "ndbi|$border_units|$centroid_sample|μ"] = ndbi.(nir=nir, blue=blue)
             end
-            if !isnothing(nir) && !isnothing(green)
-                df_features[!, "ndwi|$border_units|$centroid_sample|μ"] = ndwi.(nir=nir, green=green)
+            if (:gndvi ∈ indices) && !isnothing(nir) && !isnothing(green)
+                df_features[!, "gndvi|$border_units|$centroid_sample|μ"] = gndvi.(nir=nir, green=green)
             end
-            if !isnothing(red) && !isnothing(green)
+            if (:ndri ∈ indices) && !isnothing(red) && !isnothing(green)
                 df_features[!, "ndri|$border_units|$centroid_sample|μ"] = ndri.(red=red, green=green)
             end
-            if !isnothing(nir) && !isnothing(red) && !isnothing(green) && !isnothing(blue)
+            if (:pndvi ∈ indices) && !isnothing(nir) && !isnothing(red) && !isnothing(green) && !isnothing(blue)
                 df_features[!, "pndvi|$border_units|$centroid_sample|μ"] = pndvi.(nir=nir, red=red, green=green, blue=blue)
+            end
+            if (:osavi ∈ indices) && !isnothing(nir) && !isnothing(red)
+                df_features[!, "osavi|$border_units|$centroid_sample|μ"] = osavi.(nir=nir, red=red)
+            end
+            if (:ndre ∈ indices) && !isnothing(nir) && !isnothing(red_edge)
+                df_features[!, "ndre|$border_units|$centroid_sample|μ"] = ndre.(nir=nir, red_edge=red_edge)
             end
         end
     end
@@ -181,12 +212,26 @@ function extract_features(data::Data; cor_max::Float64=0.95)::DataFrame
     df_features
 end
 
-function extract_XY(data::Data; cor_max::Float64=0.95)::Tuple{DataFrame,DataFrame}
+function extract_XY(
+    data::Data;
+    cor_max::Float64=0.95,
+    centroid_sampling::Vector{Bool}=[false, true],
+    border_widths::Vector{Int64}=collect(0:5),
+    indices::Vector{Symbol}=[:dvi, :ndvi, :ndgi, :ndbi, :gndvi, :ndri, :pndvi, :osavi, :ndre],
+    summary_stats::Dict{String,Function}=Dict("μ" => mean, "σ" => std),
+)::Tuple{DataFrame,DataFrame}
     # data = simulate_data(); cor_max::Float64=0.95
     check_dimensions(data)
     df_traits = extract_traits_per_plot(data)
     trait_names = names(select(df_traits, Not(:id)))
-    df_features = extract_features(data, cor_max=cor_max)
+    df_features = extract_features(
+        data,
+        cor_max=cor_max,
+        centroid_sampling=centroid_sampling,
+        border_widths=border_widths,
+        indices=indices,
+        summary_stats=summary_stats
+    )
     df_merged = leftjoin(df_traits, df_features, on=:id)
     if nrow(df_merged) < 3
         throw(ErrorException("We have less than 3 data-points"))

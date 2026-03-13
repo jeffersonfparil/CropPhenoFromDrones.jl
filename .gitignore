@@ -19,3 +19,8 @@
 Manifest.toml
 docs/build/
 tmp/
+simulated-*
+test.*
+# pixi environments
+.pixi/*
+!.pixi/config.toml

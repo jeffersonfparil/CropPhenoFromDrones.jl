@@ -58,10 +58,16 @@ function simulate_shapes(raster::Raster; rows::Int64=10, columns::Int64=10)::Dat
     return df_shapes
 end
 
-function simulate_phenotypes(df_shapes::DataFrame; max_replications::Int64=2, n_traits::Int64=1, seed::Int64=42, channels::Union{Nothing,Dict{String,Raster}}=nothing)::DataFrame
-    # channels = Dict("red" => simulate_raster(), "green" => simulate_raster(), "blue" => simulate_raster()); df_shapes = simulate_shapes(channels["red"]); max_replications::Int64=2; n_traits::Int64=1; seed::Int64=42
+function simulate_phenotypes(
+    df_shapes::DataFrame;
+    max_replications::Int64=2,
+    n_traits::Int64=1,
+    i²::Vector{Float64}=[0.5],
+    seed::Int64=42,
+    channels::Union{Nothing,Dict{String,Raster}}=nothing,
+)::DataFrame
+    # channels = Dict("red" => simulate_raster(), "green" => simulate_raster(), "blue" => simulate_raster()); df_shapes = simulate_shapes(channels["red"]); max_replications::Int64=2; n_traits::Int64=1; i²::Vector{Float64}=[0.5]; seed::Int64=42
     Random.seed!(seed)
-    N = Distributions.Normal()
     # Simulate layout
     if ("id" ∉ names(df_shapes)) || ("geometry" ∉ names(df_shapes))
         throw(
@@ -93,10 +99,12 @@ function simulate_phenotypes(df_shapes::DataFrame; max_replications::Int64=2, n_
         column=column,
         block="block_1",
     )
+    i² = repeat(i², outer=Int64(ceil(n_traits / length(i²))))[1:n_traits]
     if isnothing(channels) && isnothing(df_shapes)
         for i in 1:n_traits
             trait_name = "trait_$i"
-            df_phenotypes[!, trait_name] = randn(nrow(df_layout))
+            N = Distributions.Normal()
+            df_phenotypes[!, trait_name] = rand(N, nrow(df_phenotypes))
         end
     elseif !isnothing(channels) && isnothing(df_shapes)
         throw(ErrorException("If you wish to use the simulated channels you also need to specify the shapes."))
@@ -111,7 +119,10 @@ function simulate_phenotypes(df_shapes::DataFrame; max_replications::Int64=2, n_
                 for (channel, raster) in channels
             ]
             for z in zs
-                df_phenotypes[!, "trait_$i"] += ((i * rand(N)) .* z) + rand(N, length(z))
+                # z = zs[1]
+                N1 = Normal()
+                N2 = Normal(0.0, 1 - i²[i])
+                df_phenotypes[!, "trait_$i"] += ((100 * rand(N1)) .* z) + rand(N2, length(z))
             end
         end
     end
@@ -131,9 +142,11 @@ function simulate_data(;
     σ::Float64=1.0,
     bands::Vector{String}=["red", "green", "blue", "nir"],
     n_traits::Int64=1,
-    save::Bool=true,
+    max_replications::Int64=2,
+    i²::Vector{Float64}=[0.5],
     overwrite::Bool=false,
     seed::Int64=42,
+    save::Bool=true,
     verbose::Bool=true,
 )::Data
     # lon_ini::Float64=142.00; lon_fin::Float64=143.00; lon_step::Float64=0.001; lat_ini::Float64=-35.00; lat_fin::Float64=-36.00; lat_step::Float64=0.001; EPSG_code::Int64=32754; n_time_points::Int64=1; μ::Float64 = 0.0; σ::Float64 = 1.0; seed::Int64 = 42; bands::Vector{String}=["red", "green", "blue", "nir"]; n_traits::Int64 = 1; save::Bool = true; fname_prefix::String = "simulated"; overwrite::Bool = true; seed::Int64 = 42; verbose::Bool=false
@@ -159,7 +172,7 @@ function simulate_data(;
     verbose ? println("Simulating shapes (plot ROIs)...") : nothing
     df_shapes = simulate_shapes(channels[bands[1]])
     verbose ? println("Simulating phenotypes...") : nothing
-    df_phenotypes = simulate_phenotypes(df_shapes, n_traits=n_traits, channels=channels, seed=Int64(round(rand() * 10_000)))
+    df_phenotypes = simulate_phenotypes(df_shapes, max_replications=max_replications, n_traits=n_traits, i²=i², channels=channels, seed=Int64(round(rand() * 10_000)))
     verbose ? ProgressMeter.finish!(pb) : nothing
     # Data
     data = Data(
