@@ -202,10 +202,10 @@ function model_bayesg!(
     check_model(model)
     rng::TaskLocalRNG = Random.seed!(seed)
     Turing.@model function model_bayesg(x, y)
-        σ² ~ truncated(Normal(0, 1); lower=0)
-        intercept ~ Normal(0, 1)
+        σ² ~ truncated(Normal(0, 10.0); lower=0)
+        intercept ~ Normal(0, 10.0)
         nfeatures = size(x, 2)
-        coefficients ~ MvNormal(zeros(nfeatures), 1.0 * I)
+        coefficients ~ MvNormal(zeros(nfeatures), 10.0 * I)
         mu = intercept .+ x * coefficients
         return y ~ MvNormal(mu, σ² * I)
     end
