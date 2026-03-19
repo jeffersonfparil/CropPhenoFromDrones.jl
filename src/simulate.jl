@@ -115,7 +115,7 @@ function simulate_phenotypes(
             # i = 1
             df_phenotypes[!, "trait_$i"] .= 0.0
             zs = [
-                [mean(skipmissing(Rasters.crop(raster, to=df_shapes.geometry[j]).data)) for j in 1:nrow(df_shapes)]
+                [StatsBase.mean(skipmissing(Rasters.crop(raster, to=df_shapes.geometry[j]).data)) for j in 1:nrow(df_shapes)]
                 for (channel, raster) in channels
             ]
             for z in zs

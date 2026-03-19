@@ -23,7 +23,7 @@ mutable struct Model
         centroid_sampling::Vector{Bool}=[false, true],
         border_widths::Vector{Int64}=collect(0:5),
         indices::Vector{Symbol}=[:dvi, :ndvi, :ndgi, :ndbi, :gndvi, :ndri, :pndvi, :osavi, :ndre],
-        summary_stats::Dict{String,Function}=Dict("μ" => mean, "σ" => std),
+        summary_stats::Dict{String,Function}=Dict("μ" => StatsBase.mean, "σ" => StatsBase.std),
     )::Model
         # data = simulate_data(); trait_name = nothing; cor_max::Float64=0.5; centroid_sampling::Vector{Bool}=[false, true]; border_widths::Vector{Int64}=collect(0:5); indices::Vector{Symbol}=[:dvi, :ndvi, :ndgi, :ndbi, :gndvi, :ndri, :pndvi, :osavi, :ndre]; summary_stats::Dict{String,Function}=Dict("μ" => mean, "σ" => std);
         df_traits, df_features = extract_XY(
@@ -44,11 +44,11 @@ mutable struct Model
         else
             select(df_traits, trait_name)[:, 1]
         end
-        μ_y::Float64 = mean(skipmissing(y))
-        σ_y::Float64 = std(skipmissing(y))
+        μ_y::Float64 = StatsBase.mean(skipmissing(y))
+        σ_y::Float64 = StatsBase.std(skipmissing(y))
         X::Matrix{Float64} = Matrix(select(df_features, Not(:id)))
-        μ_X::Vector{Float64} = [mean(skipmissing(X[:, j])) for j in 1:size(X, 2)]
-        σ_X::Vector{Float64} = [std(skipmissing(X[:, j])) for j in 1:size(X, 2)]
+        μ_X::Vector{Float64} = [StatsBase.mean(skipmissing(X[:, j])) for j in 1:size(X, 2)]
+        σ_X::Vector{Float64} = [StatsBase.std(skipmissing(X[:, j])) for j in 1:size(X, 2)]
         new(
             trait_name,
             (y .- μ_y) ./ σ_y,
@@ -98,7 +98,7 @@ function cross_validate!(model::Model)::Nothing
     if length(idx_validation_not_missing_y) > 0
         y_validation = Float64.(model.y[model.idx_validation[idx_validation_not_missing_y]])
         ŷ_validation = Float64.(model.ŷ_validation[idx_validation_not_missing_y])
-        model.R²_validation = 1.00 - (sum((y_validation - ŷ_validation) .^ 2) / sum((y_validation .- mean(y_validation)) .^ 2))
+        model.R²_validation = 1.00 - (sum((y_validation - ŷ_validation) .^ 2) / sum((y_validation .- StatsBase.mean(y_validation)) .^ 2))
         model.ρ_validation = cor(y_validation, ŷ_validation)
     end
     nothing
@@ -121,7 +121,7 @@ function model_ols!(model::Model)::Nothing
     model.β = pinv(X_training' * X_training) * X_training' * y_training
     # model.β = X_training \ y_training
     model.ŷ_training = X_training * model.β
-    model.R²_training = 1.00 - (sum((y_training - model.ŷ_training) .^ 2) / sum((y_training .- mean(y_training)) .^ 2))
+    model.R²_training = 1.00 - (sum((y_training - model.ŷ_training) .^ 2) / sum((y_training .- StatsBase.mean(y_training)) .^ 2))
     model.ρ_training = cor(y_training, model.ŷ_training)
     if length(model.idx_validation) > 0
         cross_validate!(model)
@@ -165,7 +165,7 @@ function model_ridge!(model::Model; n_reps_2fcv::Int64=10, seed::Int64=42)::Noth
             C = sum((y2 .- (X2 * b)) .^ 2) + (λ * (b' * b)) # L2 cost
             push!(C_tmp, C)
         end
-        push!(Cs, mean(C_tmp))
+        push!(Cs, StatsBase.mean(C_tmp))
     end
     λ = λs[argmin(Cs)]
     # fig = CairoMakie.plot(λs, Cs); CairoMakie.save("test.png", fig)
@@ -175,7 +175,7 @@ function model_ridge!(model::Model; n_reps_2fcv::Int64=10, seed::Int64=42)::Noth
         pinv((X_training' * X_training) .+ vλ) * X_training' * y_training
     end
     model.ŷ_training = X_training * model.β
-    model.R²_training = 1.00 - (sum((y_training - model.ŷ_training) .^ 2) / sum((y_training .- mean(y_training)) .^ 2))
+    model.R²_training = 1.00 - (sum((y_training - model.ŷ_training) .^ 2) / sum((y_training .- StatsBase.mean(y_training)) .^ 2))
     model.ρ_training = cor(y_training, model.ŷ_training)
     if length(model.idx_validation) > 0
         cross_validate!(model)
@@ -230,15 +230,63 @@ function model_bayesg!(
     # describe(chain)
     # Use the mean parameter values after 150 burn-in iterations
     θ = Turing.get_params(chain[(n_burnin+1):end, :, :])
-    model.β = vcat(mean(θ.intercept), mean(stack(θ.coefficients, dims=1)[:, :, 1], dims=2)[:, 1])
+    model.β = vcat(StatsBase.mean(θ.intercept), StatsBase.mean(stack(θ.coefficients, dims=1)[:, :, 1], dims=2)[:, 1])
     model.ŷ_training = model.β[1] .+ X_training * model.β[2:end]
-    model.R²_training = 1.00 - (sum((y_training - model.ŷ_training) .^ 2) / sum((y_training .- mean(y_training)) .^ 2))
+    model.R²_training = 1.00 - (sum((y_training - model.ŷ_training) .^ 2) / sum((y_training .- StatsBase.mean(y_training)) .^ 2))
     model.ρ_training = cor(y_training, model.ŷ_training)
     if length(model.idx_validation) > 0
         cross_validate!(model)
     end
     nothing
 end
+
+
+function model_mlp!(
+    model::Model;
+    seed::Int64=42,
+)::Nothing
+    # model = Model(simulate_data()); n = length(model.y); model.idx_training = collect(1:2:n); model.idx_validation = collect(2:2:n); seed::Int64=42
+    check_model(model)
+    D::Dict{String,CuArray{Float64,2}} = Dict("X" => CuArray(Matrix(Float64.(model.X'))), "y" => CuArray(Matrix(Float64.(hcat(model.y)'))))
+    # network = init(X, seed=seed)
+    #     X::CuArray{T,2};
+    #     n_hidden_layers::Int64 = 2,
+    #     n_hidden_nodes::Vector{Int64} = repeat([256], n_hidden_layers),
+    #     dropout_rates::Vector{Float64} = repeat([0.0], n_hidden_layers),
+    #     F::Function = relu,
+    #     ∂F::Function = relu_derivative,
+    #     C::Function = MSE,
+    #     ∂C::Function = MSE_derivative,
+    #     y::Union{Nothing,CuArray{T,2}} = nothing,
+    #     seed::Int64 = 42,
+    # )
+    dl = train(D, seed=seed, verbose=true)
+    #     Xy::Dict{String,CuArray{T,2}}; # It it recommended that X be standardised (μ=0, and σ=1)
+    #     n_batches::Union{Int64,Nothing} = nothing, # if nothing, it will be calculated based on available GPU memory
+    #     fit_full::Bool = false, # if true, the model will be fit on the full data (no validation set)
+    #     n_hidden_layers::Int64 = 3,
+    #     n_hidden_nodes::Vector{Int64} = repeat([size(Xy["X"], 1)], n_hidden_layers),
+    #     dropout_rates::Vector{Float64} = repeat([0.0], n_hidden_layers),
+    #     F::Function = relu,
+    #     ∂F::Function = relu_derivative,
+    #     C::Function = MSE,
+    #     ∂C::Function = MSE_derivative,
+    #     n_epochs::Int64 = 10_000,
+    #     n_burnin_epochs::Int64 = 100,
+    #     n_patient_epochs::Int64 = 5,
+    #     optimiser::String = ["GD", "Adam", "AdamMax"][2],
+    #     η::Float64 = 0.001,
+    #     β₁::Float64 = 0.900,
+    #     β₂::Float64 = 0.999,
+    #     ϵ::Float64 = 1e-8,
+    #     seed::Int64 = 42,
+    #     verbose::Bool = true,
+    # )
+
+    nothing
+end
+
+
 
 # model = Model(simulate_data(i²=[1.00]), cor_max=1.00, centroid_sampling=[false], border_widths=collect(0:0), indices=Symbol[], summary_stats=Dict{String, Function}(Dict("μ" => mean))); n = length(model.y); idx = sample(1:n, n, replace=false); model.idx_training = idx[1:Int64(round(0.75*n))]; model.idx_validation = idx[(Int64(round(0.75*n))+1):end]
 # model = Model(simulate_data(i²=[0.75]), cor_max=1.00, centroid_sampling=[false], border_widths=collect(0:0), indices=Symbol[], summary_stats=Dict{String, Function}(Dict("μ" => mean))); n = length(model.y); idx = sample(1:n, n, replace=false); model.idx_training = idx[1:Int64(round(0.75*n))]; model.idx_validation = idx[(Int64(round(0.75*n))+1):end]
@@ -268,7 +316,7 @@ function predict_missing_y(model::Model; verbose::Bool=false)::Vector{Float64}
     if verbose
         println("Trait: $(model.trait_name)")
         display(UnicodePlots.histogram(ŷ, title=model.trait_name))
-        println("μ = $(mean(ŷ)); σ = $(std(ŷ))")
+        println("μ = $(StatsBase.mean(ŷ)); σ = $(StatsBase.std(ŷ))")
     end
     ŷ
 end

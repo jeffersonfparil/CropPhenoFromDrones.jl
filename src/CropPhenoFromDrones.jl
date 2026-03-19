@@ -9,6 +9,7 @@ using Turing, ReverseDiff
 using CSV, DataFrames, Dates
 using ProgressMeter
 using UnicodePlots, CairoMakie, GeoMakie
+using MultiLayerPerceptrons, CUDA
 
 include("io.jl")
 export Data

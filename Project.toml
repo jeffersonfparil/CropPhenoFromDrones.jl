@@ -16,6 +16,7 @@ GeoDataFrames = "62cb38b5-d8d2-4862-a48e-6a340996859f"
 GeoMakie = "db073c08-6b98-4ee5-b6a4-5efafb3259c6"
 JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MultiLayerPerceptrons = "59e84527-7a49-4b01-b3ca-b9e6646e95b5"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Rasters = "a3a2b9e3-a471-40c9-b274-f788e487c689"
@@ -43,3 +44,6 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Test"]
+
+[sources]
+MultiLayerPerceptrons = {rev = "main", url = "https://github.com/jeffersonfparil/MultiLayerPerceptrons.jl"}
